@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>МРЭО ГИБДД — Ultimate Edition</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #161f30;
+      --card-border: #2b3952;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --gold: #f59e0b;
+      --green: #10b981;
+      --red: #ef4444;
+      --police-blue: #1e40af;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
+    body { background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 12px; overflow-x: hidden; }
+
+    #confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 99; }
+
+    /* Панель баланса */
+    .top-bar {
+      width: 100%; max-width: 440px; display: flex; justify-content: space-between;
+      background: var(--card); border: 1px solid var(--card-border);
+      padding: 10px 16px; border-radius: 14px; margin-bottom: 10px;
+    }
+    .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+    .stat-val { font-size: 18px; font-weight: 800; color: var(--gold); }
+
+    /* Автомобиль */
+    .car-card {
+      width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; display: flex;
+      align-items: center; justify-content: space-between;
+    }
+    .car-info { display: flex; align-items: center; gap: 10px; }
+    .car-emoji { font-size: 32px; }
+    .car-name { font-weight: 700; font-size: 14px; }
+    .car-sub { font-size: 12px; color: var(--text-muted); }
+
+    /* Выбор окна / Очереди */
+    .desk-tabs {
+      width: 100%; max-width: 440px; display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px; margin-bottom: 12px;
+    }
+    .desk-btn {
+      background: var(--card); border: 1px solid var(--card-border); border-radius: 10px;
+      padding: 8px 4px; text-align: center; color: var(--text-muted); cursor: pointer;
+      font-size: 11px; font-weight: 700; transition: all 0.2s;
+    }
+    .desk-btn.active {
+      background: #1e293b; color: var(--accent); border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+    .desk-price { display: block; font-size: 12px; color: var(--gold); margin-top: 2px; }
+
+    /* Конструкция плашки госномера с рамкой */
+    .plate-holder {
+      perspective: 1000px; margin: 4px 0 12px; display: flex; flex-direction: column; align-items: center;
+    }
+    .license-frame {
+      background: #0f0f0f; padding: 4px 6px 7px 6px; border-radius: 8px;
+      box-shadow: 0 12px 25px rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center;
+    }
+    .frame-bottom-text {
+      color: #bbb; font-size: 9px; font-weight: 800; letter-spacing: 1.5px;
+      margin-top: 4px; text-transform: uppercase;
+    }
+
+    .plate {
+      background: #ffffff; color: #111; border: 3px solid #111; border-radius: 6px;
+      width: 320px; height: 68px; display: flex; align-items: center; justify-content: space-between;
+      padding: 2px 12px 2px 14px; transition: transform 0.1s ease;
+    }
+    .plate.spinning { transform: scale(0.97); filter: blur(0.3px); }
+    .plate-main { display: flex; font-size: 34px; font-weight: 900; letter-spacing: 2px; }
+    .plate-slot { display: inline-block; min-width: 24px; text-align: center; }
+    .plate-divider { width: 2.5px; height: 85%; background: #111; margin: 0 10px; }
+    .plate-region { display: flex; flex-direction: column; align-items: center; min-width: 44px; }
+    .region-num { font-size: 24px; font-weight: 900; line-height: 1; }
+    .region-sub { display: flex; align-items: center; gap: 3px; margin-top: 2px; }
+    .region-sub span { font-size: 8px; font-weight: 900; color: #111; }
+    .flag { width: 13px; height: 8px; border: 0.5px solid #888; display: flex; flex-direction: column; }
+    .fw { background: #fff; flex: 1; } .fb { background: #0039a6; flex: 1; } .fr { background: #d52b1e; flex: 1; }
+
+    /* Оценка номера */
+    .appraisal-box {
+      width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 12px; text-align: center; margin-bottom: 12px;
+    }
+    .appraisal-title { font-size: 14px; font-weight: 700; }
+    .appraisal-price { font-size: 19px; font-weight: 900; color: var(--green); margin: 3px 0; }
+    .appraisal-stars { font-size: 12px; color: var(--gold); }
+
+    /* Кнопки */
+    .btn-group { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 8px; }
+    .btn {
+      width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 15px;
+      font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      gap: 6px; transition: transform 0.1s ease;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-spin { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; box-shadow: 0 4px 14px rgba(37,99,235,0.4); }
+    .btn-sell { background: linear-gradient(135deg, #059669, #047857); color: #fff; }
+    .btn-action { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid var(--card-border); font-size: 13px; }
+    .btn-police { background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: #fff; }
+
+    /* Модалки */
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-content {
+      background: var(--card); border: 1px solid var(--card-border); width: 100%; max-width: 420px;
+      border-radius: 18px; padding: 18px; max-height: 85vh; overflow-y: auto;
+    }
+
+    /* Бланк СТС */
+    .sts-doc {
+      background: linear-gradient(135deg, #fbcfe8, #f472b6); color: #1e1b4b;
+      border: 2px solid #db2777; border-radius: 12px; padding: 16px; position: relative;
+      font-family: "Courier New", monospace; box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    }
+    .sts-stamp {
+      position: absolute; right: 15px; bottom: 15px; width: 75px; height: 75px;
+      border: 3px dashed #1e3a8a; border-radius: 50%; color: #1e3a8a;
+      display: flex; align-items: center; justify-content: center; font-size: 9px;
+      font-weight: 900; text-align: center; transform: rotate(-15deg); opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Верхняя панель -->
+  <div class="top-bar">
+    <div>
+      <div class="stat-label">Баланс</div>
+      <div class="stat-val" id="ui-balance">50 000 ₽</div>
+    </div>
+    <div style="text-align: right;">
+      <div class="stat-label">Кручений</div>
+      <div class="stat-val" style="color: var(--text);" id="ui-rolls">0</div>
+    </div>
+  </div>
+
+  <!-- Карточка авто -->
+  <div class="car-card">
+    <div class="car-info">
+      <div class="car-emoji" id="ui-car-emoji">🚗</div>
+      <div>
+        <div class="car-name" id="ui-car-name">ВАЗ-2107</div>
+        <div class="car-sub">Номер: <span id="ui-car-plate" style="color: var(--accent); font-weight:700;">Транзиты</span></div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 6px;">
+      <button class="btn-action" style="padding: 7px 10px; border-radius: 8px;" id="open-sts-btn">📄 СТС</button>
+      <button class="btn-action" style="padding: 7px 10px; border-radius: 8px;" id="open-shop-btn">🏬 Салон</button>
+    </div>
+  </div>
+
+  <!-- Выбор окна МРЭО -->
+  <div class="desk-tabs">
+    <div class="desk-btn active" data-desk="normal">
+      Окно №1 (Обычное)
+      <span class="desk-price">2 000 ₽</span>
+    </div>
+    <div class="desk-btn" data-desk="friend">
+      Окно №3 (Знакомый)
+      <span class="desk-price">30 000 ₽</span>
+    </div>
+    <div class="desk-btn" data-desk="boss">
+      Начальник (VIP)
+      <span class="desk-price">250 000 ₽</span>
+    </div>
+  </div>
+
+  <!-- Номерная плашка с рамкой -->
+  <div class="plate-holder">
+    <div class="license-frame">
+      <div class="plate" id="plate">
+        <div class="plate-main">
+          <span class="plate-slot" id="l1">А</span>
+          <span class="plate-slot" id="d1">7</span>
+          <span class="plate-slot" id="d2">7</span>
+          <span class="plate-slot" id="d3">7</span>
+          <span class="plate-slot" id="l2">М</span>
+          <span class="plate-slot" id="l3">Р</span>
+        </div>
+        <div class="plate-divider"></div>
+        <div class="plate-region">
+          <div class="region-num" id="reg">777</div>
+          <div class="region-sub">
+            <span>RUS</span>
+            <div class="flag"><div class="fw"></div><div class="fb"></div><div class="fr"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="frame-bottom-text" id="ui-frame-text">ФСБ РОССИИ</div>
+    </div>
+  </div>
+
+  <!-- Оценка номера -->
+  <div class="appraisal-box">
+    <div class="appraisal-title" id="ui-rarity-title">Выберите окно и крутите</div>
+    <div class="appraisal-price" id="ui-rarity-price">Оценка перекупа: ~0 ₽</div>
+    <div class="appraisal-stars" id="ui-rarity-stars">⭐⭐⭐⭐⭐</div>
+  </div>
+
+  <!-- Кнопки управления -->
+  <div class="btn-group">
+    <button class="btn btn-spin" id="spin-btn">🎲 Крутить номер</button>
+    <div style="display: flex; gap: 6px;">
+      <button class="btn btn-sell" id="sell-btn" style="flex: 1;" disabled>💰 Продать</button>
+      <button class="btn btn-action" id="equip-btn" style="flex: 1;" disabled>🚘 На авто</button>
+    </div>
+    <button class="btn btn-police" id="drive-city-btn">🚨 Выехать в город (Рейд ДПС)</button>
+    <button class="btn btn-action" id="open-frame-btn">🔲 Выбрать рамку номера</button>
+    <button class="btn btn-action" id="loan-btn" style="display: none; background: #991b1b; color: #fff;">💳 Микрозайм (+50 000 ₽)</button>
+  </div>
+
+  <!-- Модалка автосалона -->
+  <div class="modal" id="shop-modal">
+    <div class="modal-content">
+      <h3 style="margin-bottom: 12px; text-align: center;">🏬 Автосалон</h3>
+      <div id="shop-cars-list"></div>
+      <button class="btn btn-action" style="margin-top: 10px;" onclick="closeModal('shop-modal')">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Модалка рамок -->
+  <div class="modal" id="frame-modal">
+    <div class="modal-content">
+      <h3 style="margin-bottom: 12px; text-align: center;">🔲 Подномерные рамки</h3>
+      <div id="frames-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <button class="btn btn-action" style="margin-top: 12px;" onclick="closeModal('frame-modal')">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Модалка СТС -->
+  <div class="modal" id="sts-modal">
+    <div class="modal-content">
+      <h3 style="margin-bottom: 12px; text-align: center;">Свидетельство ТС</h3>
+      <div class="sts-doc">
+        <div style="font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 8px;">РОССИЙСКАЯ ФЕДЕРАЦИЯ<br>СВИДЕТЕЛЬСТВО О РЕГИСТРАЦИИ ТС</div>
+        <p><b>РЕГ. ЗНАК:</b> <span id="sts-plate" style="background:#fff; padding:1px 4px; border-radius:3px;">-</span></p>
+        <p><b>МАРКА/МОДЕЛЬ:</b> <span id="sts-car">-</span></p>
+        <p><b>VIN:</b> XTA210700K<span id="sts-vin">982314</span></p>
+        <p><b>СОБСТВЕННИК:</b> ТЕЛЕГРАМ ВОДИТЕЛЬ</p>
+        <p><b>ОСОБЫЕ ОТМЕТКИ:</b> ВЫДАНО МРЭО ГИБДД</p>
+        <div class="sts-stamp">МРЭО ГИБДД<br>ДЛЯ ПАКЕТОВ<br>№1</div>
+      </div>
+      <button class="btn btn-action" style="margin-top: 14px;" onclick="closeModal('sts-modal')">Спрятать в бардачок</button>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq = 550, duration = 0.04) {
+      try {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.frequency.value = freq;
+        g.gain.setValueAtTime(0.06, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    const FRAMES = [
+      "ФСБ РОССИИ",
+      "УПРАВЛЕНИЕ ДЕЛАМИ ПРЕЗИДЕНТА РФ",
+      "МВД РОССИИ",
+      "СЛЕДСТВЕННЫЙ КОМИТЕТ",
+      "ПРОКУРАТУРА РФ",
+      "SMOTRA // СМОТРА",
+      "ЧИСТО ПО КАЙФУ",
+      "СПАСИ И СОХРАНИ"
+    ];
+
+    const CARS = [
+      { id: 'vaz', name: 'ВАЗ-2107', emoji: '🚗', price: 0 },
+      { id: 'camry', name: 'Toyota Camry 3.5', emoji: '🏎', price: 2500000 },
+      { id: 'bmw', name: 'BMW M5 F90', emoji: '🚀', price: 8000000 },
+      { id: 'gelik', name: 'G 63 AMG «Гелик»', emoji: '🚙', price: 22000000 },
+      { id: 'aurus', name: 'Aurus Senat', emoji: '🏛', price: 50000000 }
+    ];
+
+    const DESKS = {
+      normal: { name: 'Обычное', fee: 2000 },
+      friend: { name: 'Знакомый', fee: 30000 },
+      boss: { name: 'VIP Начальник', fee: 250000 }
+    };
+
+    const LETTERS = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
+    const REGIONS = [777, 799, 178, 116, 123, 77, 99, 199, 50, 90];
+
+    let currentDesk = 'normal';
+    let balance = parseInt(localStorage.getItem('mreo_balance')) || 50000;
+    let rolls = parseInt(localStorage.getItem('mreo_rolls')) || 0;
+    let currentCarId = localStorage.getItem('mreo_car') || 'vaz';
+    let ownedCars = JSON.parse(localStorage.getItem('mreo_owned_cars') || '["vaz"]');
+    let installedPlate = localStorage.getItem('mreo_plate') || 'ТРАНЗИТЫ';
+    let selectedFrame = localStorage.getItem('mreo_frame') || FRAMES[0];
+
+    let curPlate = null;
+    let curPrice = 0;
+
+    function saveState() {
+      localStorage.setItem('mreo_balance', balance);
+      localStorage.setItem('mreo_rolls', rolls);
+      localStorage.setItem('mreo_car', currentCarId);
+      localStorage.setItem('mreo_owned_cars', JSON.stringify(ownedCars));
+      localStorage.setItem('mreo_plate', installedPlate);
+      localStorage.setItem('mreo_frame', selectedFrame);
+    }
+
+    function updateUI() {
+      document.getElementById('ui-balance').textContent = `${balance.toLocaleString()} ₽`;
+      document.getElementById('ui-rolls').textContent = rolls;
+
+      const currentCar = CARS.find(c => c.id === currentCarId);
+      document.getElementById('ui-car-name').textContent = currentCar.name;
+      document.getElementById('ui-car-emoji').textContent = currentCar.emoji;
+      document.getElementById('ui-car-plate').textContent = installedPlate;
+      document.getElementById('ui-frame-text').textContent = selectedFrame;
+
+      const fee = DESKS[currentDesk].fee;
+      document.getElementById('spin-btn').textContent = `🎲 Крутить (${fee.toLocaleString()} ₽)`;
+
+      const spinBtn = document.getElementById('spin-btn');
+      const loanBtn = document.getElementById('loan-btn');
+      if (balance < fee) {
+        spinBtn.disabled = true;
+        loanBtn.style.display = 'block';
+      } else {
+        spinBtn.disabled = false;
+        loanBtn.style.display = 'none';
+      }
+      saveState();
+    }
+
+    // Переключение окон МРЭО
+    document.querySelectorAll('.desk-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.desk-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentDesk = btn.dataset.desk;
+        updateUI();
+      });
+    });
+
+    // Генерация с учетом тира окна
+    function rollNumber() {
+      let l1, d1, d2, d3, l2, l3, reg;
+      reg = REGIONS[Math.floor(Math.random() * REGIONS.length)];
+
+      if (currentDesk === 'boss') {
+        // VIP Начальник: Только спецсерии или крутые цифры
+        const special = [
+          ['Е','К','Х', '7','7','7'],
+          ['А','М','Р', '0','9','7'],
+          ['В','О','Р', '0','0','1'],
+          ['А','А','А', '7','7','7'],
+          ['О','О','О', '1','0','0']
+        ][Math.floor(Math.random() * 5)];
+        [l1, l2, l3, d1, d2, d3] = [special[0], special[1], special[2], special[3], special[4], special[5]];
+      } else if (currentDesk === 'friend' && Math.random() < 0.6) {
+        // Повышенный шанс на зеркалки и ровные числа
+        const pair = Math.floor(Math.random() * 10).toString();
+        d1 = pair; d2 = Math.floor(Math.random() * 10).toString(); d3 = pair;
+        l1 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+        l2 = l1; l3 = l1;
+      } else {
+        l1 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+        d1 = Math.floor(Math.random() * 10).toString();
+        d2 = Math.floor(Math.random() * 10).toString();
+        d3 = Math.floor(Math.random() * 10).toString();
+        l2 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+        l3 = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+      }
+
+      return { l1, d1, d2, d3, l2, l3, reg };
+    }
+
+    function evaluatePlate(l1, d1, d2, d3, l2, l3) {
+      const letters = `${l1}${l2}${l3}`;
+      const digits = `${d1}${d2}${d3}`;
+
+      if (letters === 'АМР' && digits === '097') return { name: '🏛 Кортеж Президента (АМР097)', price: 20000000, stars: '⭐⭐⭐⭐⭐' };
+      if (letters === 'ЕКХ') return { name: '🔥 ФСО «Еду Как Хочу»', price: 12000000, stars: '⭐⭐⭐⭐⭐' };
+      if (letters === 'АМР') return { name: '🏛 Правительственная АМР', price: 7500000, stars: '⭐⭐⭐⭐⭐' };
+      if (letters === 'ВОР') return { name: '😎 Блатная серия ВОР', price: 5000000, stars: '⭐⭐⭐⭐⭐' };
+      if (d1 === d2 && d2 === d3 && l1 === l2 && l2 === l3) return { name: '👑 Абсолют (Все буквы и цифры)', price: 9000000, stars: '⭐⭐⭐⭐⭐' };
+      if (digits === '777') return { name: '🎰 Три топора (777)', price: 3000000, stars: '⭐⭐⭐⭐' };
+      if (d1 === d2 && d2 === d3) return { name: `💎 Ровная тройка (${digits})`, price: 1500000, stars: '⭐⭐⭐⭐' };
+      if (digits.startsWith('00')) return { name: `⚡ Первая десятка (${digits})`, price: 800000, stars: '⭐⭐⭐' };
+      if (l1 === l2 && l2 === l3) return { name: `✨ Три одинаковые буквы (${letters})`, price: 500000, stars: '⭐⭐⭐' };
+      if (d1 === d3 && d1 !== d2) return { name: `🪞 Зеркалочка (${digits})`, price: 150000, stars: '⭐⭐' };
+
+      return { name: 'Обычная штамповка МРЭО', price: 2500, stars: '⭐' };
+    }
+
+    // Анимация вращения
+    const spinBtn = document.getElementById('spin-btn');
+    const sellBtn = document.getElementById('sell-btn');
+    const equipBtn = document.getElementById('equip-btn');
+    const plateEl = document.getElementById('plate');
+
+    spinBtn.addEventListener('click', () => {
+      const fee = DESKS[currentDesk].fee;
+      if (balance < fee) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      balance -= fee;
+      rolls += 1;
+      updateUI();
+
+      spinBtn.disabled = true;
+      sellBtn.disabled = true;
+      equipBtn.disabled = true;
+      plateEl.classList.add('spinning');
+
+      let counter = 0;
+      const interval = setInterval(() => {
+        playTone(500, 0.03);
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+        const temp = rollNumber();
+        document.getElementById('l1').textContent = temp.l1;
+        document.getElementById('d1').textContent = temp.d1;
+        document.getElementById('d2').textContent = temp.d2;
+        document.getElementById('d3').textContent = temp.d3;
+        document.getElementById('l2').textContent = temp.l2;
+        document.getElementById('l3').textContent = temp.l3;
+        document.getElementById('reg').textContent = temp.reg;
+
+        counter++;
+        if (counter > 15) {
+          clearInterval(interval);
+          plateEl.classList.remove('spinning');
+
+          const final = rollNumber();
+          document.getElementById('l1').textContent = final.l1;
+          document.getElementById('d1').textContent = final.d1;
+          document.getElementById('d2').textContent = final.d2;
+          document.getElementById('d3').textContent = final.d3;
+          document.getElementById('l2').textContent = final.l2;
+          document.getElementById('l3').textContent = final.l3;
+          document.getElementById('reg').textContent = final.reg;
+
+          curPlate = `${final.l1} ${final.d1}${final.d2}${final.d3} ${final.l2}${final.l3} | ${final.reg}`;
+          const evalRes = evaluatePlate(final.l1, final.d1, final.d2, final.d3, final.l2, final.l3);
+          curPrice = evalRes.price;
+
+          document.getElementById('ui-rarity-title').textContent = evalRes.name;
+          document.getElementById('ui-rarity-price').textContent = `Оценка перекупа: ~${evalRes.price.toLocaleString()} ₽`;
+          document.getElementById('ui-rarity-stars').textContent = evalRes.stars;
+
+          if (evalRes.price >= 500000) {
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+          }
+
+          spinBtn.disabled = false;
+          sellBtn.disabled = false;
+          equipBtn.disabled = false;
+        }
+      }, 75);
+    });
+
+    // Продажа
+    sellBtn.addEventListener('click', () => {
+      if (!curPlate) return;
+      balance += curPrice;
+      if (tg) tg.showAlert(`🤝 Перекуп забрал номер за ${curPrice.toLocaleString()} ₽!`);
+      curPlate = null;
+      sellBtn.disabled = true;
+      equipBtn.disabled = true;
+      document.getElementById('ui-rarity-title').textContent = 'Продано перекупу!';
+      document.getElementById('ui-rarity-price').textContent = 'Деньги в кармане 💰';
+      updateUI();
+    });
+
+    // Установка
+    equipBtn.addEventListener('click', () => {
+      if (!curPlate) return;
+      installedPlate = curPlate;
+      if (tg) tg.showAlert(`✅ Номер ${installedPlate} теперь на вашей машине!`);
+      equipBtn.disabled = true;
+      updateUI();
+    });
+
+    // 🚨 Выезд в город (Рейд ДПС)
+    document.getElementById('drive-city-btn').addEventListener('click', () => {
+      if (installedPlate === 'ТРАНЗИТЫ') {
+        balance = Math.max(0, balance - 5000);
+        if (tg) tg.showAlert('🚨 ВАС ОСТАНОВИЛ ЭКИПАЖ ДПС!\n\n«Езда без номеров! Штраф 5 000 ₽ выписан по всей строгости!»');
+        updateUI();
+        return;
+      }
+
+      if (installedPlate.includes('ЕКХ') || installedPlate.includes('АМР')) {
+        const bonus = 10000;
+        balance += bonus;
+        if (tg) tg.showAlert('🫡 ВСТРЕЧА С ДПС:\n\nИнспектор вытянулся по струнке, отдал воинское приветствие и перекрыл поток! За представительский класс начислено +10 000 ₽!');
+        updateUI();
+        return;
+      }
+
+      if (installedPlate.includes('777') || installedPlate.includes('ВОР')) {
+        if (tg) tg.showAlert('🤝 ВСТРЕЧА С ДПС:\n\n«Счастливого пути, уважаемый водитель! Не нарушайте скоростной режим!»');
+        return;
+      }
+
+      if (tg) tg.showAlert('🚔 ВСТРЕЧА С ДПС:\n\n«Старший лейтенант Смирнов. Документы в порядке, страховка есть. Езжайте дальше!»');
+    });
+
+    // Модалка СТС
+    document.getElementById('open-sts-btn').addEventListener('click', () => {
+      const car = CARS.find(c => c.id === currentCarId);
+      document.getElementById('sts-plate').textContent = installedPlate;
+      document.getElementById('sts-car').textContent = car.name;
+      document.getElementById('sts-modal').style.display = 'flex';
+    });
+
+    // Модалка рамок
+    document.getElementById('open-frame-btn').addEventListener('click', () => {
+      const list = document.getElementById('frames-list');
+      list.innerHTML = '';
+      FRAMES.forEach(frame => {
+        const b = document.createElement('button');
+        b.className = 'btn btn-action';
+        b.textContent = frame;
+        b.onclick = () => {
+          selectedFrame = frame;
+          closeModal('frame-modal');
+          updateUI();
+        };
+        list.appendChild(b);
+      });
+      document.getElementById('frame-modal').style.display = 'flex';
+    });
+
+    // Модалка магазина
+    document.getElementById('open-shop-btn').addEventListener('click', () => {
+      const list = document.getElementById('shop-cars-list');
+      list.innerHTML = '';
+      CARS.forEach(car => {
+        const owned = ownedCars.includes(car.id);
+        const cur = currentCarId === car.id;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px; background:rgba(255,255,255,0.04); margin-bottom:8px; border-radius:10px;';
+        row.innerHTML = `
+          <div><b>${car.emoji} ${car.name}</b><div style="font-size:12px; color:var(--text-muted);">${car.price === 0 ? 'Базовая' : car.price.toLocaleString() + ' ₽'}</div></div>
+          <div>${cur ? '<span style="color:var(--accent);">Выбрана</span>' : owned ? `<button class="btn-action" style="padding:6px 12px; border-radius:8px;" onclick="chooseCar('${car.id}')">Сесть</button>` : `<button class="btn-action" style="padding:6px 12px; border-radius:8px; background:var(--green); color:#fff;" onclick="buyCar('${car.id}',${car.price})">Купить</button>`}</div>
+        `;
+        list.appendChild(row);
+      });
+      document.getElementById('shop-modal').style.display = 'flex';
+    });
+
+    window.closeModal = (id) => document.getElementById(id).style.display = 'none';
+    window.chooseCar = (id) => { currentCarId = id; closeModal('shop-modal'); updateUI(); };
+    window.buyCar = (id, p) => {
+      if (balance < p) { if (tg) tg.showAlert('Не хватает денег!'); return; }
+      balance -= p; ownedCars.push(id); currentCarId = id; closeModal('shop-modal'); updateUI();
+    };
+
+    document.getElementById('loan-btn').addEventListener('click', () => { balance += 50000; updateUI(); });
+
+    updateUI();
+  </script>
+</body>
+</html>
